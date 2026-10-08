@@ -8,11 +8,13 @@ export default function AlgoPanel({
   active,
   slow,
   onToggleSlow,
+  effectNote,
 }: {
   trace: TraceStep[];
   active: number; // indeks langkah terakhir yang sudah tampil (-1 = belum ada)
   slow: boolean;
   onToggleSlow: () => void;
+  effectNote?: string; // penjelasan soal efek (kilau dan suara) setelah spin selesai
 }) {
   const current = active >= 0 ? trace[active] : null;
   const noteByLine = new Map<number, string>();
@@ -62,6 +64,13 @@ export default function AlgoPanel({
           );
         })}
       </div>
+
+      {effectNote && (
+        <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <div className="mb-1 font-semibold">Soal kilau dan suara barusan</div>
+          {effectNote}
+        </div>
+      )}
 
       {trace.length === 0 && (
         <p className="mt-3 text-xs text-slate-500">Tekan SPIN buat lihat baris-barisnya jalan.</p>

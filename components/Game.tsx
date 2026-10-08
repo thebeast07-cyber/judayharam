@@ -1,25 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   DEFAULT_CONFIG,
   REELS,
-  ROWS,
-  SYMBOLS,
   idleGrid,
-  randomGrid,
   spin,
   type Config,
   type TraceStep,
 } from "@/lib/engine";
+import { sfx } from "@/lib/sound";
 import AlgoPanel from "./AlgoPanel";
 import Kitchen from "./Kitchen";
+import Reels from "./Reels";
 
 const rp = (n: number) => "Rp" + Math.round(n).toLocaleString("id-ID");
 
 type Stats = { spins: number; bet: number; won: number };
 const ZERO: Stats = { spins: 0, bet: 0, won: 0 };
 const BETS = [1_000, 5_000, 10_000, 50_000];
+
+function makeNote(win: number, bet: number, rtp: number): string {
+  if (win === 0) return "Nggak ada kilau dan nggak ada bunyi menang. Taruhan lu langsung hilang.";
+  const net = win - bet;
+  if (net < 0) {
+    return `Layar nyala dan bunyi "menang", tapi lu tetap rugi ${rp(-net)} di spin ini. Kekalahan yang didandani jadi kemenangan.`;
+  }
+  if (net === 0) return "Impas. Uang lu balik, tapi lu udah buang satu spin.";
+  return `Menang beneran kali ini (+${rp(net)}). Tapi RTP ${(rtp * 100).toFixed(0)}% artinya dalam jangka panjang saldo lu tetap berkurang.`;
+}
 
 function Spark({ data }: { data: number[] }) {
   const step = Math.max(1, Math.ceil(data.length / 300));
@@ -37,14 +46,32 @@ function Spark({ data }: { data: number[] }) {
     .join(" ");
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="h-20 w-full text-sky-400">
-      <polyline
-        points={d}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
+      <polyline points={d} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function Lcd({ label, children, accent }: { label: string; children: ReactNode; accent?: boolean }) {
+  return (
+    <div className="lcd px-3 py-1.5">
+      <div className="text-[10px] uppercase tracking-widest text-amber-200/70">{label}</div>
+      <div className={`font-mono text-base font-bold sm:text-lg ${accent ? "text-emerald-300" : "text-amber-100"}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Pill({ on, onClick, children }: { on?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md border px-3 py-1.5 text-xs ${
+        on ? "border-sky-400 bg-sky-500/20 text-sky-200" : "border-slate-600 bg-slate-900/70 text-slate-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -52,6 +79,7 @@ export default function Game() {
   const [cfg, setCfg] = useState<Config>(DEFAULT_CONFIG);
   const [balance, setBalance] = useState(DEFAULT_CONFIG.startBalance);
   const [grid, setGrid] = useState<number[][]>(idleGrid());
+  const [stopped, setStopped] = useState<boolean[]>(Array(REELS).fill(true));
   const [hitCount, setHitCount] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [stats, setStats] = useState<Stats>(ZERO);
@@ -62,6 +90,9 @@ export default function Game() {
   const [trace, setTrace] = useState<TraceStep[]>([]);
   const [active, setActive] = useState(-1);
   const [slow, setSlow] = useState(false);
+  const [sound, setSound] = useState(false); // mati dulu sampai pengguna sendiri yang nyalain
+  const [sweet, setSweet] = useState(true); // "pemanis": kilau, glow, dan suara
+  const [effectNote, setEffectNote] = useState("");
 
   const canSpin = !spinning && balance >= cfg.bet && !showRecap;
 
@@ -70,43 +101,71 @@ export default function Game() {
     setStats(ZERO);
     setHistory([cfg.startBalance]);
     setGrid(idleGrid());
+    setStopped(Array(REELS).fill(true));
     setHitCount(0);
     setLastWin(0);
+    setTrace([]);
+    setActive(-1);
+    setEffectNote("");
     setShowRecap(false);
+  }
+
+  function changeBet(dir: 1 | -1) {
+    if (spinning) return;
+    const i = BETS.indexOf(cfg.bet);
+    const next = BETS[Math.min(BETS.length - 1, Math.max(0, i + dir))];
+    setCfg({ ...cfg, bet: next });
   }
 
   function doSpin() {
     if (!canSpin) return;
     const res = spin(cfg, balance, cfg.bet);
     const bet = cfg.bet;
+    const rtp = cfg.rtp;
     const newBal = balance - bet + res.win;
     const willEnd = cfg.sessionLimit > 0 && stats.spins + 1 >= cfg.sessionLimit;
+    const audible = sound && sweet;
 
-    // Baris algoritma nyala satu-satu dulu, baru reel berhenti.
+    // Urutan: baris algoritma nyala satu-satu dulu, baru reel berhenti satu-satu.
     const stepMs = slow ? 550 : 130;
-    const dur = res.trace.length * stepMs + 250;
+    const gap = slow ? 420 : 170;
+    const traceEnd = res.trace.length * stepMs + 250;
+    const total = traceEnd + (REELS - 1) * gap + 160;
 
     setSpinning(true);
     setHitCount(0);
     setLastWin(0);
+    setEffectNote("");
     setBalance(balance - bet);
+    setGrid(res.grid);
+    setStopped(Array(REELS).fill(false));
     setTrace(res.trace);
     setActive(-1);
-    res.trace.forEach((_, i) => setTimeout(() => setActive(i), 60 + i * stepMs));
+    if (audible) sfx.spin(traceEnd / 1000 + 0.2);
 
-    const t = setInterval(() => setGrid(randomGrid()), 70);
+    res.trace.forEach((_, i) => setTimeout(() => setActive(i), 60 + i * stepMs));
+    for (let c = 0; c < REELS; c++) {
+      setTimeout(() => {
+        setStopped((s) => s.map((v, j) => (j === c ? true : v)));
+        if (audible) sfx.stop();
+      }, traceEnd + c * gap);
+    }
+
     setTimeout(() => {
-      clearInterval(t);
-      setGrid(res.grid);
       setHitCount(res.hitCount);
       setLastWin(res.win);
       setBalance(newBal);
       setStats((s) => ({ spins: s.spins + 1, bet: s.bet + bet, won: s.won + res.win }));
       setHistory((h) => [...h, newBal]);
       setCfg((c) => (c.force === "none" ? c : { ...c, force: "none" }));
+      setEffectNote(makeNote(res.win, bet, rtp));
       setSpinning(false);
+      if (audible) {
+        if (res.win > 0) sfx.win(res.mult);
+        else sfx.lose();
+      }
       if (willEnd || newBal < bet) setShowRecap(true);
-    }, dur);
+    }, total);
   }
 
   // Simulasi cepat: nunjukin hasil jangka panjang tanpa nunggu animasi.
@@ -132,6 +191,7 @@ export default function Game() {
     }
     setBalance(bal);
     setGrid(lastGrid);
+    setStopped(Array(REELS).fill(true));
     setHitCount(lastHit);
     setStats((s) => ({ spins: s.spins + spins, bet: s.bet + bet, won: s.won + won }));
     setHistory((h) => [...h, ...hist]);
@@ -142,129 +202,115 @@ export default function Game() {
   const realRtp = stats.bet > 0 ? (stats.won / stats.bet) * 100 : 0;
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6">
+    <main className={`mx-auto max-w-6xl px-4 py-6 ${sweet ? "" : "plain"}`}>
       <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200">
         Demo edukasi. Nggak ada deposit, nggak ada WD, uangnya bohongan.
       </div>
 
-      <header className="mb-6 text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight text-red-500">Judi Haram</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Ini cara kerja web slot dari dalam. Coba main, lalu buka dapurnya.
-        </p>
-        {cfg.gacorLabel && (
-          <div className="mx-auto mt-3 inline-block rounded-full bg-emerald-500/20 px-4 py-1 text-sm font-semibold text-emerald-300">
-            GACOR 98%
-          </div>
-        )}
-      </header>
-
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <div>
-      <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
-        <div className="mb-3 flex items-center justify-between text-sm">
-          <div>
-            <div className="text-slate-400">Saldo (bohongan)</div>
-            <div className="text-xl font-bold">{rp(balance)}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-slate-400">Menang terakhir</div>
-            <div className={`text-xl font-bold ${lastWin > 0 ? "text-emerald-400" : "text-slate-500"}`}>
-              {rp(lastWin)}
+        <div>
+          <div className="gold-frame mx-auto max-w-[720px]">
+            <div className="rounded-[16px] bg-[#070f24]/95 p-3 sm:p-4">
+              {/* bar atas */}
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <Lcd label="Saldo">{rp(balance)}</Lcd>
+                <div className="text-center">
+                  <h1 className="gold-text text-3xl leading-none sm:text-5xl">JUDI HARAM</h1>
+                  {cfg.gacorLabel && (
+                    <div className="mt-1 inline-block rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-semibold text-emerald-300">
+                      GACOR 98%
+                    </div>
+                  )}
+                </div>
+                <Lcd label="Spin">
+                  {stats.spins}
+                  {cfg.sessionLimit > 0 ? `/${cfg.sessionLimit}` : ""}
+                </Lcd>
+              </div>
+
+              <Reels grid={grid} stopped={stopped} hitCount={hitCount} />
+
+              {/* bar bawah */}
+              <div className="mt-3 grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto]">
+                <div className="grid grid-cols-3 gap-2">
+                  <Lcd label="Menang" accent={lastWin > 0}>
+                    {rp(lastWin)}
+                  </Lcd>
+                  <Lcd label="Jackpot">{rp(cfg.jackpotMult * cfg.bet)}</Lcd>
+                  <div className="lcd px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-widest text-amber-200/70">Total bet</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <button
+                        onClick={() => changeBet(-1)}
+                        disabled={spinning}
+                        className="h-6 w-6 rounded-full border border-amber-400/60 text-amber-200 disabled:opacity-40"
+                        aria-label="Kurangi taruhan"
+                      >
+                        −
+                      </button>
+                      <span className="font-mono text-sm font-bold text-amber-100">{rp(cfg.bet)}</span>
+                      <button
+                        onClick={() => changeBet(1)}
+                        disabled={spinning}
+                        className="h-6 w-6 rounded-full border border-amber-400/60 text-amber-200 disabled:opacity-40"
+                        aria-label="Tambah taruhan"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={doSpin}
+                  disabled={!canSpin}
+                  className="spin-btn mx-auto"
+                  aria-label="Spin"
+                >
+                  <img src="/ui/spin-button.webp" alt="" draggable={false} className="h-full w-full" />
+                  <span className="absolute inset-0 grid place-items-center text-lg font-black tracking-wider text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                    {spinning ? "..." : "SPIN"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-5 gap-2 rounded-xl bg-slate-950 p-2">
-          {Array.from({ length: ROWS * REELS }).map((_, i) => {
-            const r = Math.floor(i / REELS);
-            const c = i % REELS;
-            const hit = !spinning && r === 1 && c < hitCount;
-            return (
-              <div
-                key={i}
-                className={[
-                  "flex aspect-square items-center justify-center rounded-lg border text-3xl sm:text-4xl",
-                  r === 1 ? "border-slate-600 bg-slate-800" : "border-slate-800 bg-slate-900",
-                  hit ? "border-emerald-400 bg-emerald-500/20" : "",
-                  spinning ? "opacity-80" : "",
-                ].join(" ")}
-              >
-                {SYMBOLS[grid[c][r]].icon}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-slate-400">Taruhan</span>
-          {BETS.map((b) => (
-            <button
-              key={b}
-              onClick={() => setCfg({ ...cfg, bet: b })}
-              className={`rounded-md border px-2 py-1 text-xs ${
-                cfg.bet === b
-                  ? "border-sky-400 bg-sky-500/20 text-sky-200"
-                  : "border-slate-700 text-slate-300"
-              }`}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Pill onClick={() => runBatch(1000)}>Simulasi 1.000 spin</Pill>
+            <Pill onClick={() => runBatch(100000)}>Main sampai abis</Pill>
+            <Pill
+              on={sound}
+              onClick={() => {
+                if (!sound) sfx.unlock();
+                setSound((v) => !v);
+              }}
             >
-              {rp(b)}
-            </button>
-          ))}
+              Suara: {sound ? "NYALA" : "MATI"}
+            </Pill>
+            <Pill on={sweet} onClick={() => setSweet((v) => !v)}>
+              Pemanis: {sweet ? "NYALA" : "MATI"}
+            </Pill>
+            <Pill on={showKitchen} onClick={() => setShowKitchen((v) => !v)}>
+              {showKitchen ? "Tutup Dapur" : "Intip Dapur"}
+            </Pill>
+          </div>
+
+          {showKitchen && (
+            <Kitchen cfg={cfg} setCfg={setCfg} balance={balance} onReset={resetSession} />
+          )}
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <button
-            onClick={doSpin}
-            disabled={!canSpin}
-            className="rounded-lg bg-sky-600 px-4 py-3 font-semibold text-white disabled:opacity-40"
-          >
-            {spinning ? "Muter..." : "SPIN"}
-          </button>
-          <button
-            onClick={() => runBatch(1000)}
-            disabled={spinning || balance < cfg.bet}
-            className="rounded-lg border border-slate-600 px-4 py-3 text-sm text-slate-200 disabled:opacity-40"
-          >
-            Simulasi 1.000 spin
-          </button>
-          <button
-            onClick={() => runBatch(100000)}
-            disabled={spinning || balance < cfg.bet}
-            className="rounded-lg border border-red-500/60 px-4 py-3 text-sm text-red-300 disabled:opacity-40"
-          >
-            Main sampai abis
-          </button>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            Spin sesi ini: {stats.spins}
-            {cfg.sessionLimit > 0 ? ` / ${cfg.sessionLimit}` : ""}
-          </span>
-          <button
-            onClick={() => setShowKitchen((v) => !v)}
-            className="rounded-md border border-slate-600 px-3 py-1 text-slate-200"
-          >
-            {showKitchen ? "Tutup Dapur" : "Intip Dapur"}
-          </button>
-        </div>
-      </section>
-
-      {showKitchen && (
-        <Kitchen cfg={cfg} setCfg={setCfg} balance={balance} onReset={resetSession} />
-      )}
+        <AlgoPanel
+          trace={trace}
+          active={active}
+          slow={slow}
+          onToggleSlow={() => setSlow((v) => !v)}
+          effectNote={effectNote}
+        />
       </div>
 
-      <AlgoPanel
-        trace={trace}
-        active={active}
-        slow={slow}
-        onToggleSlow={() => setSlow((v) => !v)}
-      />
-      </div>
-
-      <footer className="mt-8 text-center text-xs text-slate-500">
+      <footer className="mt-8 text-center text-xs text-slate-400">
         Butuh bantuan buat berhenti? Hubungi Halo Kemkes 1500-567 atau psikolog/puskesmas terdekat.
       </footer>
 

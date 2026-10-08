@@ -2,8 +2,191 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
 body {
-  background: #0b1020;
+  min-height: 100%;
+}
+
+body {
   color: #e5e7eb;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: #050b1c url("/ui/background.jpg") center / cover fixed no-repeat;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse at center, rgba(5, 11, 28, 0.25), rgba(5, 11, 28, 0.85));
+}
+
+/* ---------- mesin ---------- */
+.gold-frame {
+  padding: 7px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #f8e08e, #b8862b 38%, #f6d77a 58%, #7a4f12);
+  box-shadow: 0 0 0 2px #2c1d05, 0 24px 60px rgba(0, 0, 0, 0.65);
+}
+
+.reel-window {
+  border-radius: 15px;
+  padding: 8px;
+  background: linear-gradient(#0a1530, #050b1c);
+  box-shadow: inset 0 4px 14px rgba(0, 0, 0, 0.85);
+}
+
+.reel {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1 / 3;
+  border-radius: 10px;
+  background: linear-gradient(#0c1a3d, #071029);
+}
+
+.reel-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9%;
+  border-bottom: 1px solid rgba(199, 154, 58, 0.18);
+  background: radial-gradient(circle at 50% 40%, rgba(40, 70, 140, 0.35), rgba(5, 10, 28, 0) 70%);
+}
+
+.reel-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.reel-strip {
+  animation: reel-spin 0.38s linear infinite;
+  filter: blur(2.2px);
+}
+
+.reel-drop {
+  animation: reel-drop 0.26s ease-out;
+}
+
+.payline {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 0;
+  border-top: 2px dashed rgba(246, 215, 122, 0.35);
+  pointer-events: none;
+}
+
+.win-cell {
+  position: relative;
+}
+
+.win-cell::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 10px;
+  border: 2px solid #f6d77a;
+  box-shadow: 0 0 14px rgba(246, 215, 122, 0.75), inset 0 0 12px rgba(246, 215, 122, 0.35);
+  animation: win-pulse 1s ease-in-out infinite;
+}
+
+/* ---------- panel dan teks ---------- */
+.lcd {
+  border-radius: 10px;
+  border: 1px solid rgba(199, 154, 58, 0.55);
+  background: linear-gradient(#071126, #0b1a3a);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+.gold-text {
+  font-family: Impact, "Arial Black", Haettenschweiler, sans-serif;
+  letter-spacing: 0.05em;
+  background: linear-gradient(#fff3b0, #f5c542 50%, #b9791a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 0 #4a2f05);
+}
+
+.spin-btn {
+  position: relative;
+  width: 7rem;
+  height: 7rem;
+  transition: transform 0.08s ease, filter 0.2s ease;
+}
+
+.spin-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.spin-btn:disabled {
+  filter: grayscale(0.85) brightness(0.7);
+  cursor: not-allowed;
+}
+
+/* ---------- mode tanpa pemanis ---------- */
+.plain .gold-frame {
+  background: #334155;
+  box-shadow: none;
+}
+
+.plain .reel-cell img {
+  filter: grayscale(1) contrast(0.9);
+}
+
+.plain .reel-strip {
+  filter: none;
+}
+
+.plain .win-cell::after {
+  box-shadow: none;
+  animation: none;
+  border-color: #94a3b8;
+}
+
+.plain .gold-text {
+  background: none;
+  color: #cbd5e1;
+  filter: none;
+}
+
+.plain .spin-btn img {
+  filter: grayscale(1);
+}
+
+@keyframes reel-spin {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes reel-drop {
+  0% {
+    transform: translateY(-14%);
+  }
+  70% {
+    transform: translateY(3%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes win-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
 }

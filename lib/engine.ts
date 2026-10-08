@@ -1,15 +1,16 @@
-// Mesin slot bohongan. Semua simbol buatan sendiri (emoji), bukan aset siapa pun.
+// Mesin slot bohongan. Gambar simbol ada di public/symbols/ (gampang diganti,
+// cukup timpa file dengan nama yang sama). Urutan = tingkat hadiah, terakhir = jackpot.
 
 export const REELS = 5;
 export const ROWS = 3;
 
 export const SYMBOLS = [
-  { icon: "🫒", label: "Zaitun" },
-  { icon: "🍇", label: "Anggur" },
-  { icon: "🏺", label: "Guci" },
-  { icon: "🪙", label: "Koin" },
-  { icon: "👑", label: "Mahkota" },
-  { icon: "⚡", label: "Petir (Jackpot)" },
+  { img: "/symbols/cherry.webp", label: "Ceri" },
+  { img: "/symbols/lemon.webp", label: "Lemon" },
+  { img: "/symbols/grape.webp", label: "Anggur" },
+  { img: "/symbols/bell.webp", label: "Lonceng" },
+  { img: "/symbols/bar.webp", label: "BAR" },
+  { img: "/symbols/seven.webp", label: "Tujuh (Jackpot)" },
 ] as const;
 
 const JACKPOT_SYM = SYMBOLS.length - 1;
@@ -175,7 +176,7 @@ export function spin(
     }
     if (cfg.nearMiss && rng() < 0.4) {
       nearMiss = true;
-      for (const i of [0, 1, 2]) grid[i][0] = JACKPOT_SYM; // petir "nyaris" sejajar
+      for (const i of [0, 1, 2]) grid[i][0] = JACKPOT_SYM; // angka 7 "nyaris" sejajar
       if (grid[2][1] === JACKPOT_SYM) grid[2][1] = randSym(rng, JACKPOT_SYM);
     }
   }
