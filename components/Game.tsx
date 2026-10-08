@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   DEFAULT_CONFIG,
   REELS,
@@ -93,6 +93,8 @@ export default function Game() {
   const [sound, setSound] = useState(false); // mati dulu sampai pengguna sendiri yang nyalain
   const [sweet, setSweet] = useState(true); // "pemanis": kilau, glow, dan suara
   const [effectNote, setEffectNote] = useState("");
+  const [auto, setAuto] = useState(false);
+  const [autoLeft, setAutoLeft] = useState(0);
 
   const canSpin = !spinning && balance >= cfg.bet && !showRecap;
 
@@ -108,6 +110,7 @@ export default function Game() {
     setActive(-1);
     setEffectNote("");
     setShowRecap(false);
+    setAuto(false);
   }
 
   function changeBet(dir: 1 | -1) {
@@ -198,6 +201,32 @@ export default function Game() {
     setShowRecap(true);
   }
 
+  function startAuto(n: number) {
+    if (!canSpin) return;
+    setAutoLeft(n);
+    setAuto(true);
+  }
+
+  function stopAuto() {
+    setAuto(false);
+  }
+
+  // Spin otomatis: lanjut tiap spin kelar, berhenti kalau jatah habis,
+  // saldo nggak cukup, atau rekap sesi muncul (batas spin per sesi).
+  useEffect(() => {
+    if (!auto) return;
+    if (showRecap || autoLeft <= 0 || balance < cfg.bet) {
+      setAuto(false);
+      return;
+    }
+    if (spinning) return;
+    const t = setTimeout(() => {
+      setAutoLeft((n) => n - 1);
+      doSpin();
+    }, 450);
+    return () => clearTimeout(t);
+  });
+
   const net = stats.won - stats.bet;
   const realRtp = stats.bet > 0 ? (stats.won / stats.bet) * 100 : 0;
 
@@ -277,6 +306,25 @@ export default function Game() {
           </div>
 
           <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {auto ? (
+              <Pill on onClick={stopAuto}>
+                Stop otomatis (sisa {autoLeft})
+              </Pill>
+            ) : (
+              <div className="flex items-center gap-1 rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1 text-xs text-slate-200">
+                <span className="text-slate-400">Otomatis</span>
+                {[10, 25, 50].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => startAuto(n)}
+                    disabled={!canSpin}
+                    className="rounded border border-slate-600 px-2 py-0.5 hover:border-sky-400 disabled:opacity-40"
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
             <Pill onClick={() => runBatch(1000)}>Simulasi 1.000 spin</Pill>
             <Pill onClick={() => runBatch(100000)}>Main sampai abis</Pill>
             <Pill
