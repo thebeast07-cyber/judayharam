@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import { buildTiers, expectedRtp, type Config, type Force } from "@/lib/engine";
-import { SPIN_SOURCE } from "@/lib/source";
 
 const rp = (n: number) => "Rp" + Math.round(n).toLocaleString("id-ID");
 
@@ -163,10 +162,6 @@ export default function Kitchen({
         </div>
       </Row>
 
-      <div className="pt-3">
-        <div className="mb-1 text-sm font-medium text-slate-200">Kode yang jalan</div>
-        <pre className="overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-300">{SPIN_SOURCE}</pre>
-      </div>
     </section>
   );
 }

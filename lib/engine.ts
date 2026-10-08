@@ -88,6 +88,23 @@ export interface SpinResult {
   hitCount: number; // berapa simbol berurutan di payline (0 = kalah)
   jackpot: boolean;
   nearMiss: boolean;
+  trace: TraceStep[]; // langkah keputusan, dipakai panel algoritma
+}
+
+export interface TraceStep {
+  line: number; // indeks baris di SPIN_LINES (lib/source.ts)
+  note: string; // nilai variabel atau keputusan di langkah ini
+}
+
+const FORCE_LABEL: Record<Force, string> = {
+  none: "",
+  lose: "KALAH",
+  win: "MENANG",
+  jackpot: "JACKPOT",
+};
+
+function sumP(tiers: Tier[]): number {
+  return tiers.reduce((s, t) => s + t.p, 0);
 }
 
 function randSym(rng: () => number, exclude = -1): number {
@@ -120,6 +137,9 @@ export function spin(
   rng: () => number = Math.random
 ): SpinResult {
   const tiers = buildTiers(cfg, balance);
+  const pNormal = sumP(buildTiers({ ...cfg, rigWhenRich: false }, balance));
+  const pFinal = sumP(tiers);
+  const r = rng(); // angka acak yang jadi penentu
   let hit: Tier | null = null;
 
   if (cfg.force === "jackpot") {
@@ -127,13 +147,13 @@ export function spin(
   } else if (cfg.force === "win") {
     hit = tiers[Math.floor(rng() * (tiers.length - 1))];
   } else if (cfg.force === "none") {
-    let r = rng();
+    let x = r;
     for (const t of tiers) {
-      if (r < t.p) {
+      if (x < t.p) {
         hit = t;
         break;
       }
-      r -= t.p;
+      x -= t.p;
     }
   }
 
@@ -161,12 +181,48 @@ export function spin(
   }
 
   const mult = hit ? hit.mult : 0;
+  const win = Math.round(bet * mult);
+
+  // Jejak keputusan, baris-barisnya sesuai SPIN_LINES di lib/source.ts
+  const pct = (p: number) => (p * 100).toFixed(1) + "%";
+  const rigged = pFinal < pNormal - 1e-9;
+  const forced = cfg.force !== "none";
+  const trace: TraceStep[] = [
+    { line: 1, note: `r = ${r.toFixed(4)}` },
+    { line: 2, note: `peluang = ${pct(pNormal)} (dari RTP ${(cfg.rtp * 100).toFixed(0)}%)` },
+    {
+      line: 3,
+      note: rigged
+        ? `saldo Rp${Math.round(balance).toLocaleString("id-ID")} lewat batas, peluang dipotong jadi ${pct(pFinal)}`
+        : cfg.rigWhenRich
+          ? "saldo belum lewat batas, dilewati"
+          : "fitur mati, dilewati",
+    },
+    {
+      line: 4,
+      note: forced ? `bandar paksa hasil: ${FORCE_LABEL[cfg.force]}` : "nggak ada paksaan, lanjut",
+    },
+  ];
+  if (!forced) {
+    if (hit) {
+      trace.push({
+        line: 5,
+        note: `${r.toFixed(4)} < ${pct(pFinal)}? ya. MENANG x${hit.mult} = Rp${win.toLocaleString("id-ID")}`,
+      });
+    } else {
+      trace.push({ line: 5, note: `${r.toFixed(4)} < ${pct(pFinal)}? tidak` });
+      trace.push({ line: 6, note: "KALAH, dapat Rp0" });
+    }
+  }
+  trace.push({ line: 8, note: "hasil udah pasti, reel baru digambar sekarang" });
+
   return {
     grid,
     mult,
-    win: Math.round(bet * mult),
+    win,
     hitCount,
     jackpot: !!hit && hit.sym === JACKPOT_SYM,
     nearMiss,
+    trace,
   };
 }

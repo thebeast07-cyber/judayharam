@@ -1,14 +1,13 @@
-// Cuplikan inti logika yang ditampilkan di panel "Intip Dapur".
-export const SPIN_SOURCE = [
-  "// Inti logikanya. Cuma segini.",
-  "function spin(rtp, bet) {",
-  "  const r = Math.random();              // angka acak 0..1",
-  "  const peluang = hitungDariRTP(rtp);   // diatur bandar, bukan pemain",
-  "  if (r < peluang) return bet * pengali; // menang",
-  "  return 0;                              // kalah",
+// Baris kode yang tampil di panel algoritma. Indeks baris dipakai trace dari engine,
+// jadi kalau urutan di sini berubah, ubah juga nomor `line` di spin() (lib/engine.ts).
+export const SPIN_LINES: string[] = [
+  "function spin(rtp, bet, saldo) {",
+  "  const r = Math.random();",
+  "  let peluang = peluangMenang(rtp);      // diatur bandar",
+  "  if (saldo > batasKaya) peluang *= 0.3; // kalahin yang lagi kaya",
+  "  if (paksa) return paksa;               // tombol rahasia bandar",
+  "  if (r < peluang) return bet * pengali;",
+  "  return 0;",
   "}",
-  "",
-  "// Hasil sudah diputuskan SEBELUM reel muter.",
-  "// Animasi muter itu cuma pajangan.",
-  "// Nggak ada jam gacor, nggak ada pola. Cuma angka yang diset server.",
-].join("\n");
+  "// reel digambar SETELAH hasil di atas keluar",
+];

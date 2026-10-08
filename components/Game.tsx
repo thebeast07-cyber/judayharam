@@ -10,7 +10,9 @@ import {
   randomGrid,
   spin,
   type Config,
+  type TraceStep,
 } from "@/lib/engine";
+import AlgoPanel from "./AlgoPanel";
 import Kitchen from "./Kitchen";
 
 const rp = (n: number) => "Rp" + Math.round(n).toLocaleString("id-ID");
@@ -57,6 +59,9 @@ export default function Game() {
   const [lastWin, setLastWin] = useState(0);
   const [showRecap, setShowRecap] = useState(false);
   const [showKitchen, setShowKitchen] = useState(false);
+  const [trace, setTrace] = useState<TraceStep[]>([]);
+  const [active, setActive] = useState(-1);
+  const [slow, setSlow] = useState(false);
 
   const canSpin = !spinning && balance >= cfg.bet && !showRecap;
 
@@ -77,10 +82,17 @@ export default function Game() {
     const newBal = balance - bet + res.win;
     const willEnd = cfg.sessionLimit > 0 && stats.spins + 1 >= cfg.sessionLimit;
 
+    // Baris algoritma nyala satu-satu dulu, baru reel berhenti.
+    const stepMs = slow ? 550 : 130;
+    const dur = res.trace.length * stepMs + 250;
+
     setSpinning(true);
     setHitCount(0);
     setLastWin(0);
     setBalance(balance - bet);
+    setTrace(res.trace);
+    setActive(-1);
+    res.trace.forEach((_, i) => setTimeout(() => setActive(i), 60 + i * stepMs));
 
     const t = setInterval(() => setGrid(randomGrid()), 70);
     setTimeout(() => {
@@ -94,7 +106,7 @@ export default function Game() {
       setCfg((c) => (c.force === "none" ? c : { ...c, force: "none" }));
       setSpinning(false);
       if (willEnd || newBal < bet) setShowRecap(true);
-    }, 900);
+    }, dur);
   }
 
   // Simulasi cepat: nunjukin hasil jangka panjang tanpa nunggu animasi.
@@ -130,7 +142,7 @@ export default function Game() {
   const realRtp = stats.bet > 0 ? (stats.won / stats.bet) * 100 : 0;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-6">
+    <main className="mx-auto max-w-6xl px-4 py-6">
       <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200">
         Demo edukasi. Nggak ada deposit, nggak ada WD, uangnya bohongan.
       </div>
@@ -147,6 +159,8 @@ export default function Game() {
         )}
       </header>
 
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div>
       <section className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
         <div className="mb-3 flex items-center justify-between text-sm">
           <div>
@@ -240,6 +254,15 @@ export default function Game() {
       {showKitchen && (
         <Kitchen cfg={cfg} setCfg={setCfg} balance={balance} onReset={resetSession} />
       )}
+      </div>
+
+      <AlgoPanel
+        trace={trace}
+        active={active}
+        slow={slow}
+        onToggleSlow={() => setSlow((v) => !v)}
+      />
+      </div>
 
       <footer className="mt-8 text-center text-xs text-slate-500">
         Butuh bantuan buat berhenti? Hubungi Halo Kemkes 1500-567 atau psikolog/puskesmas terdekat.
