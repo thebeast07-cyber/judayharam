@@ -24,7 +24,7 @@ export default function Reels({
 }) {
   return (
     <div className="reel-window">
-      <div className="relative grid grid-cols-5 gap-2">
+      <div className="relative grid grid-cols-5 gap-1.5 sm:gap-2">
         {Array.from({ length: REELS }).map((_, c) => {
           const rot = [...STRIP.slice(c), ...STRIP.slice(0, c)];
           const items = [...rot, ...rot];

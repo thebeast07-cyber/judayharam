@@ -19,6 +19,7 @@ const rp = (n: number) => "Rp" + Math.round(n).toLocaleString("id-ID");
 type Stats = { spins: number; bet: number; won: number };
 const ZERO: Stats = { spins: 0, bet: 0, won: 0 };
 const BETS = [1_000, 5_000, 10_000, 50_000];
+const AUTO_STEPS = [10, 25, 50];
 
 function makeNote(win: number, bet: number, rtp: number): string {
   if (win === 0) return "Nggak ada kilau dan nggak ada bunyi menang. Taruhan lu langsung hilang.";
@@ -51,11 +52,25 @@ function Spark({ data }: { data: number[] }) {
   );
 }
 
-function Lcd({ label, children, accent }: { label: string; children: ReactNode; accent?: boolean }) {
+function Lcd({
+  label,
+  children,
+  accent,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  accent?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="lcd px-3 py-1.5">
-      <div className="text-[10px] uppercase tracking-widest text-amber-200/70">{label}</div>
-      <div className={`font-mono text-base font-bold sm:text-lg ${accent ? "text-emerald-300" : "text-amber-100"}`}>
+    <div className={`lcd px-2 py-1 sm:px-3 sm:py-1.5 ${className}`}>
+      <div className="text-[9px] uppercase tracking-widest text-amber-200/70 sm:text-[10px]">{label}</div>
+      <div
+        className={`whitespace-nowrap font-mono text-[12px] font-bold sm:text-base lg:text-lg ${
+          accent ? "text-emerald-300" : "text-amber-100"
+        }`}
+      >
         {children}
       </div>
     </div>
@@ -66,7 +81,7 @@ function Pill({ on, onClick, children }: { on?: boolean; onClick: () => void; ch
   return (
     <button
       onClick={onClick}
-      className={`rounded-md border px-3 py-1.5 text-xs ${
+      className={`shrink-0 whitespace-nowrap rounded-md border px-3 py-2 text-xs lg:py-1.5 ${
         on ? "border-sky-400 bg-sky-500/20 text-sky-200" : "border-slate-600 bg-slate-900/70 text-slate-200"
       }`}
     >
@@ -95,6 +110,7 @@ export default function Game() {
   const [effectNote, setEffectNote] = useState("");
   const [auto, setAuto] = useState(false);
   const [autoLeft, setAutoLeft] = useState(0);
+  const [autoMenu, setAutoMenu] = useState(false);
 
   const canSpin = !spinning && balance >= cfg.bet && !showRecap;
 
@@ -203,6 +219,7 @@ export default function Game() {
 
   function startAuto(n: number) {
     if (!canSpin) return;
+    setAutoMenu(false);
     setAutoLeft(n);
     setAuto(true);
   }
@@ -229,21 +246,26 @@ export default function Game() {
 
   const net = stats.won - stats.bet;
   const realRtp = stats.bet > 0 ? (stats.won / stats.bet) * 100 : 0;
+  const spinCount = `${stats.spins}${cfg.sessionLimit > 0 ? `/${cfg.sessionLimit}` : ""}`;
+  const ticker =
+    active >= 0 && trace[active] ? `› ${trace[active].note}` : "Tekan SPIN. Langkah algoritmanya muncul di sini.";
 
   return (
-    <main className={`mx-auto max-w-6xl px-4 py-6 ${sweet ? "" : "plain"}`}>
-      <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200">
+    <main className={`mx-auto max-w-6xl px-3 pb-40 pt-3 sm:px-4 lg:pb-6 lg:pt-6 ${sweet ? "" : "plain"}`}>
+      <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-center text-xs text-amber-200 sm:text-sm">
         Demo edukasi. Nggak ada deposit, nggak ada WD, uangnya bohongan.
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div>
           <div className="gold-frame mx-auto max-w-[720px]">
-            <div className="rounded-[16px] bg-[#070f24]/95 p-3 sm:p-4">
-              {/* bar atas */}
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <Lcd label="Saldo">{rp(balance)}</Lcd>
-                <div className="text-center">
+            <div className="rounded-[16px] bg-[#070f24]/95 p-2 sm:p-4">
+              {/* judul */}
+              <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
+                <Lcd label="Saldo" className="hidden sm:block">
+                  {rp(balance)}
+                </Lcd>
+                <div className="mx-auto text-center">
                   <h1 className="gold-text text-3xl leading-none sm:text-5xl">JUDI HARAM</h1>
                   {cfg.gacorLabel && (
                     <div className="mt-1 inline-block rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-semibold text-emerald-300">
@@ -251,80 +273,137 @@ export default function Game() {
                     </div>
                   )}
                 </div>
-                <Lcd label="Spin">
-                  {stats.spins}
-                  {cfg.sessionLimit > 0 ? `/${cfg.sessionLimit}` : ""}
+                <Lcd label="Spin" className="hidden sm:block">
+                  {spinCount}
                 </Lcd>
+              </div>
+
+              {/* ringkasan ringkas khusus layar kecil */}
+              <div className="mb-2 grid grid-cols-3 gap-1.5 sm:hidden">
+                <Lcd label="Saldo">{rp(balance)}</Lcd>
+                <Lcd label="Menang" accent={lastWin > 0}>
+                  {rp(lastWin)}
+                </Lcd>
+                <Lcd label="Spin">{spinCount}</Lcd>
               </div>
 
               <Reels grid={grid} stopped={stopped} hitCount={hitCount} />
 
-              {/* bar bawah */}
-              <div className="mt-3 grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto]">
-                <div className="grid grid-cols-3 gap-2">
-                  <Lcd label="Menang" accent={lastWin > 0}>
-                    {rp(lastWin)}
-                  </Lcd>
-                  <Lcd label="Jackpot">{rp(cfg.jackpotMult * cfg.bet)}</Lcd>
-                  <div className="lcd px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-widest text-amber-200/70">Total bet</div>
-                    <div className="flex items-center justify-between gap-1">
-                      <button
-                        onClick={() => changeBet(-1)}
-                        disabled={spinning}
-                        className="h-6 w-6 rounded-full border border-amber-400/60 text-amber-200 disabled:opacity-40"
-                        aria-label="Kurangi taruhan"
-                      >
-                        −
-                      </button>
-                      <span className="font-mono text-sm font-bold text-amber-100">{rp(cfg.bet)}</span>
-                      <button
-                        onClick={() => changeBet(1)}
-                        disabled={spinning}
-                        className="h-6 w-6 rounded-full border border-amber-400/60 text-amber-200 disabled:opacity-40"
-                        aria-label="Tambah taruhan"
-                      >
-                        +
-                      </button>
+              {/* ticker algoritma, di desktop sudah ada panel samping */}
+              <div className="mt-2 min-h-[2.5rem] rounded-lg bg-slate-950/80 px-3 py-2 font-mono text-[11px] leading-snug text-sky-200 lg:hidden">
+                {ticker}
+              </div>
+
+              {/* bar kontrol: nempel di bawah layar di HP, nyatu di bingkai di desktop */}
+              <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-500/30 bg-[#070f24]/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:static lg:mt-3 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+                <div className="mx-auto flex max-w-[720px] items-center gap-2 sm:gap-3">
+                  <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                    <Lcd label="Menang" accent={lastWin > 0} className="hidden sm:block">
+                      {rp(lastWin)}
+                    </Lcd>
+                    <Lcd label="Jackpot" className="hidden sm:block">
+                      {rp(cfg.jackpotMult * cfg.bet)}
+                    </Lcd>
+                    <div className="lcd px-2 py-1 sm:py-1.5">
+                      <div className="text-[9px] uppercase tracking-widest text-amber-200/70 sm:text-[10px]">
+                        Total bet
+                      </div>
+                      <div className="flex items-center justify-between gap-1">
+                        <button
+                          onClick={() => changeBet(-1)}
+                          disabled={spinning}
+                          className="h-8 w-8 rounded-full border border-amber-400/60 text-lg leading-none text-amber-200 disabled:opacity-40 lg:h-6 lg:w-6 lg:text-base"
+                          aria-label="Kurangi taruhan"
+                        >
+                          −
+                        </button>
+                        <span className="font-mono text-sm font-bold text-amber-100">{rp(cfg.bet)}</span>
+                        <button
+                          onClick={() => changeBet(1)}
+                          disabled={spinning}
+                          className="h-8 w-8 rounded-full border border-amber-400/60 text-lg leading-none text-amber-200 disabled:opacity-40 lg:h-6 lg:w-6 lg:text-base"
+                          aria-label="Tambah taruhan"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  onClick={doSpin}
-                  disabled={!canSpin}
-                  className="spin-btn mx-auto"
-                  aria-label="Spin"
-                >
-                  <img src="/ui/spin-button.webp" alt="" draggable={false} className="h-full w-full" />
-                  <span className="absolute inset-0 grid place-items-center text-lg font-black tracking-wider text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
-                    {spinning ? "..." : "SPIN"}
-                  </span>
-                </button>
+                  <button
+                    onClick={doSpin}
+                    disabled={!canSpin}
+                    className="spin-btn -mt-8 shrink-0 lg:mt-0"
+                    aria-label="Spin"
+                  >
+                    <img src="/ui/spin-button.webp" alt="" draggable={false} className="h-full w-full" />
+                    <span className="absolute inset-0 grid place-items-center text-base font-black tracking-wider text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] lg:text-lg">
+                      {spinning ? "..." : "SPIN"}
+                    </span>
+                  </button>
+
+                  {/* Auto: di HP lewat tombol ini, di desktop lewat chip di bawah mesin */}
+                  <div className="relative shrink-0 lg:hidden">
+                    {auto ? (
+                      <button
+                        onClick={stopAuto}
+                        className="h-12 w-16 rounded-xl border border-sky-400 bg-sky-500/20 text-xs font-bold leading-tight text-sky-200"
+                      >
+                        Stop
+                        <br />
+                        {autoLeft}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setAutoMenu((v) => !v)}
+                        disabled={!canSpin}
+                        className="h-12 w-16 rounded-xl border border-slate-500 bg-slate-900 text-xs font-bold text-slate-200 disabled:opacity-40"
+                      >
+                        Auto
+                      </button>
+                    )}
+                    {autoMenu && !auto && (
+                      <div className="absolute bottom-full right-0 mb-2 flex gap-1 rounded-xl border border-slate-600 bg-slate-900 p-1.5 shadow-xl">
+                        {AUTO_STEPS.map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => startAuto(n)}
+                            className="h-10 w-12 rounded-lg border border-slate-600 text-sm font-bold text-slate-100"
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {auto ? (
-              <Pill on onClick={stopAuto}>
-                Stop otomatis (sisa {autoLeft})
-              </Pill>
-            ) : (
-              <div className="flex items-center gap-1 rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1 text-xs text-slate-200">
-                <span className="text-slate-400">Otomatis</span>
-                {[10, 25, 50].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => startAuto(n)}
-                    disabled={!canSpin}
-                    className="rounded border border-slate-600 px-2 py-0.5 hover:border-sky-400 disabled:opacity-40"
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* chip: scroll samping di HP, rata tengah di desktop */}
+          <div className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:-mx-4 sm:px-4 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0">
+            <div className="hidden lg:block">
+              {auto ? (
+                <Pill on onClick={stopAuto}>
+                  Stop otomatis (sisa {autoLeft})
+                </Pill>
+              ) : (
+                <div className="flex items-center gap-1 rounded-md border border-slate-600 bg-slate-900/70 px-2 py-1 text-xs text-slate-200">
+                  <span className="text-slate-400">Otomatis</span>
+                  {AUTO_STEPS.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => startAuto(n)}
+                      disabled={!canSpin}
+                      className="rounded border border-slate-600 px-2 py-0.5 hover:border-sky-400 disabled:opacity-40"
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Pill onClick={() => runBatch(1000)}>Simulasi 1.000 spin</Pill>
             <Pill onClick={() => runBatch(100000)}>Main sampai abis</Pill>
             <Pill
@@ -364,7 +443,7 @@ export default function Game() {
 
       {showRecap && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5">
+          <div className="max-h-full w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5">
             <h2 className="text-xl font-bold">Rekap sesi</h2>
             <div className="mt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span className="text-slate-400">Jumlah spin</span><span>{stats.spins.toLocaleString("id-ID")}</span></div>
@@ -385,7 +464,7 @@ export default function Game() {
                 : "Kebetulan lu lagi untung. Coba 'Main sampai abis' dan lihat ujungnya ke mana."}
             </p>
             <div className="mt-4 flex gap-2">
-              <button onClick={resetSession} className="flex-1 rounded-lg bg-sky-600 px-4 py-2 font-semibold">
+              <button onClick={resetSession} className="flex-1 rounded-lg bg-sky-600 px-4 py-3 font-semibold">
                 Ulang dari awal
               </button>
               <button
@@ -393,7 +472,7 @@ export default function Game() {
                   setShowRecap(false);
                   setShowKitchen(true);
                 }}
-                className="flex-1 rounded-lg border border-slate-600 px-4 py-2 text-sm"
+                className="flex-1 rounded-lg border border-slate-600 px-4 py-3 text-sm"
               >
                 Intip Dapur
               </button>
