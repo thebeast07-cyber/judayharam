@@ -21,6 +21,14 @@ const ZERO: Stats = { spins: 0, bet: 0, won: 0 };
 const BETS = [1_000, 5_000, 10_000, 50_000];
 const AUTO_STEPS = [10, 25, 50];
 
+// 10.000 -> "10rb", 1.500.000 -> "1,5jt"
+function short(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${(a / 1_000_000).toFixed(1).replace(/\.0$/, "").replace(".", ",")}jt`;
+  if (a >= 1_000) return `${Math.round(a / 1_000)}rb`;
+  return String(a);
+}
+
 function makeNote(win: number, bet: number, rtp: number): string {
   if (win === 0) return "Nggak ada kilau dan nggak ada bunyi menang. Taruhan lu langsung hilang.";
   const net = win - bet;
@@ -111,6 +119,7 @@ export default function Game() {
   const [auto, setAuto] = useState(false);
   const [autoLeft, setAutoLeft] = useState(0);
   const [autoMenu, setAutoMenu] = useState(false);
+  const [results, setResults] = useState<{ win: number; bet: number }[]>([]); // terbaru di depan
 
   const canSpin = !spinning && balance >= cfg.bet && !showRecap;
 
@@ -127,6 +136,7 @@ export default function Game() {
     setEffectNote("");
     setShowRecap(false);
     setAuto(false);
+    setResults([]);
   }
 
   function changeBet(dir: 1 | -1) {
@@ -153,7 +163,6 @@ export default function Game() {
 
     setSpinning(true);
     setHitCount(0);
-    setLastWin(0);
     setEffectNote("");
     setBalance(balance - bet);
     setGrid(res.grid);
@@ -176,6 +185,7 @@ export default function Game() {
       setBalance(newBal);
       setStats((s) => ({ spins: s.spins + 1, bet: s.bet + bet, won: s.won + res.win }));
       setHistory((h) => [...h, newBal]);
+      setResults((r) => [{ win: res.win, bet }, ...r].slice(0, 20));
       setCfg((c) => (c.force === "none" ? c : { ...c, force: "none" }));
       setEffectNote(makeNote(res.win, bet, rtp));
       setSpinning(false);
@@ -281,7 +291,7 @@ export default function Game() {
               {/* ringkasan ringkas khusus layar kecil */}
               <div className="mb-2 grid grid-cols-3 gap-1.5 sm:hidden">
                 <Lcd label="Saldo">{rp(balance)}</Lcd>
-                <Lcd label="Menang" accent={lastWin > 0}>
+                <Lcd label="Menang" accent={lastWin > 0} className={spinning ? "opacity-50" : ""}>
                   {rp(lastWin)}
                 </Lcd>
                 <Lcd label="Spin">{spinCount}</Lcd>
@@ -294,11 +304,46 @@ export default function Game() {
                 {ticker}
               </div>
 
+              {/* riwayat per spin + total sesi: yang nggak pernah ditampilin mesin slot asli */}
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-slate-950/60 px-3 py-1.5 text-[11px]">
+                <div className="flex min-w-0 flex-1 gap-1 overflow-hidden">
+                  {results.length === 0 ? (
+                    <span className="text-slate-500">Riwayat spin muncul di sini</span>
+                  ) : (
+                    results.slice(0, 8).map((r, i) => {
+                      const d = r.win - r.bet;
+                      return (
+                        <span
+                          key={i}
+                          className={`shrink-0 rounded px-1.5 py-0.5 font-mono font-semibold ${
+                            d > 0
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : d < 0
+                                ? "bg-red-500/20 text-red-300"
+                                : "bg-slate-700/60 text-slate-300"
+                          }`}
+                        >
+                          {d === 0 ? "0" : `${d > 0 ? "+" : "−"}${short(d)}`}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
+                <div className={`shrink-0 font-mono font-bold ${net < 0 ? "text-red-400" : "text-emerald-300"}`}>
+                  Total {net < 0 ? "−" : "+"}
+                  {rp(Math.abs(net))}
+                </div>
+              </div>
+
               {/* bar kontrol: nempel di bawah layar di HP, nyatu di bingkai di desktop */}
               <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-500/30 bg-[#070f24]/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:static lg:mt-3 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
                 <div className="mx-auto flex max-w-[720px] items-center gap-2 sm:gap-3">
                   <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
-                    <Lcd label="Menang" accent={lastWin > 0} className="hidden sm:block">
+                    <Lcd
+                      label="Menang"
+                      accent={lastWin > 0}
+                      className={`hidden sm:block ${spinning ? "opacity-50" : ""}`}
+                    >
                       {rp(lastWin)}
                     </Lcd>
                     <Lcd label="Jackpot" className="hidden sm:block">
